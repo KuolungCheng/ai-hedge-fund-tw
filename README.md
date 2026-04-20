@@ -36,11 +36,6 @@
 
 ## 安裝與環境設定
 
-### Python 版本需求（重要）
-
-- 本專案請使用 **Python 3.12（含）以下版本**（建議 3.11 或 3.12）
-- 由於 NumPy 相容性因素，使用 Python 3.13+ 可能導致安裝或執行失敗
-
 ### 1. 下載專案
 
 ```bash
@@ -48,16 +43,23 @@ git clone https://github.com/KuolungCheng/ai-hedge-fund-tw.git
 cd ai-hedge-fund-tw
 ```
 
-### 2. 安裝依賴
+### 2. Python 版本需求
 
-若尚未安裝 Poetry，請先依官方文件安裝：<https://python-poetry.org/docs/#installation>  
-（macOS/Homebrew 也可用 `brew install poetry`）
+- 本專案建議使用 **Python 3.12 版本**
+- 若尚未安裝 Poetry，請先依官方文件安裝：<https://python-poetry.org/docs/#installation>
+
+```bash
+poetry env use python
+```
+
+### 3. 安裝依賴
+
 
 ```bash
 poetry install
 ```
 
-### 3. 設定 `.env`
+### 4. 設定 `.env`
 
 ```bash
 cp .env.example .env
@@ -73,6 +75,7 @@ ANTHROPIC_API_KEY=your_anthropic_key
 GROQ_API_KEY=your_groq_key
 # 或
 DEEPSEEK_API_KEY=your_deepseek_key
+# 或其他 API Key
 ```
 
 ## CLI 使用方式
