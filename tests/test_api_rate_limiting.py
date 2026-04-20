@@ -1,8 +1,14 @@
-import os
 import pytest
 from unittest.mock import Mock, patch, call
 
-from src.tools.api import _make_api_request, get_prices
+from src.tools.api import _candidate_tickers, _make_api_request, _ticker_resolution_cache, get_prices
+
+
+@pytest.fixture(autouse=True)
+def reset_ticker_resolution_cache():
+    _ticker_resolution_cache.clear()
+    yield
+    _ticker_resolution_cache.clear()
 
 class TestRateLimiting:
     """Test suite for API rate limiting functionality."""
@@ -168,52 +174,90 @@ class TestRateLimiting:
         mock_sleep.assert_not_called()
 
     @patch('src.tools.api._cache')
-    @patch('src.tools.api.time.sleep')
-    @patch('src.tools.api.requests.get')
-    def test_full_integration(self, mock_get, mock_sleep, mock_cache):
-        """Test that get_prices function properly handles rate limiting."""
+    @patch('src.tools.api.yf.download')
+    def test_full_integration(self, mock_download, mock_cache):
+        """Test that get_prices reads yfinance data and caches normalized output."""
         # Mock cache to return None (cache miss)
         mock_cache.get_prices.return_value = None
-        
-        # Setup mock responses: first 429, then 200 with valid data
-        mock_429_response = Mock()
-        mock_429_response.status_code = 429
-        
-        mock_200_response = Mock()
-        mock_200_response.status_code = 200
-        mock_200_response.json.return_value = {
-            "ticker": "AAPL",
-            "prices": [
-                {
-                    "time": "2024-01-01T00:00:00Z",
-                    "open": 100.0,
-                    "close": 101.0,
-                    "high": 102.0,
-                    "low": 99.0,
-                    "volume": 1000
-                }
-            ]
-        }
-        
-        mock_get.side_effect = [mock_429_response, mock_200_response]
-        
-        # Set environment variable for API key
-        with patch.dict(os.environ, {"FINANCIAL_DATASETS_API_KEY": "test-key"}):
-            # Call get_prices
-            result = get_prices("AAPL", "2024-01-01", "2024-01-02")
-        
+
+        import pandas as pd
+
+        mock_download.return_value = pd.DataFrame(
+            {
+                "Open": [100.0],
+                "Close": [101.0],
+                "High": [102.0],
+                "Low": [99.0],
+                "Volume": [1000],
+            },
+            index=[pd.Timestamp("2024-01-01")],
+        )
+
+        result = get_prices("AAPL", "2024-01-01", "2024-01-02")
+
         # Verify the function succeeded and returned data
         assert len(result) == 1
         assert result[0].open == 100.0
         assert result[0].close == 101.0
-        
-        # Verify rate limiting behavior
-        assert mock_get.call_count == 2
-        mock_sleep.assert_called_once_with(60)
-        
+
         # Verify cache operations
         mock_cache.get_prices.assert_called_once()
         mock_cache.set_prices.assert_called_once()
+
+    def test_candidate_tickers_supports_tw_two_fallback(self):
+        assert _candidate_tickers("4979.TW") == ["4979.TW", "4979.TWO", "4979"]
+        assert _candidate_tickers("4979.TWO") == ["4979.TWO", "4979.TW", "4979"]
+
+    def test_candidate_tickers_prefers_cached_resolution(self):
+        _ticker_resolution_cache["4979.TW"] = "4979.TWO"
+        assert _candidate_tickers("4979.TW") == ["4979.TWO", "4979.TW", "4979"]
+
+    @patch('src.tools.api._cache')
+    @patch('src.tools.api.yf.download')
+    def test_get_prices_fallbacks_from_tw_to_two(self, mock_download, mock_cache):
+        mock_cache.get_prices.return_value = None
+
+        import pandas as pd
+
+        mock_download.side_effect = [
+            pd.DataFrame(),
+            pd.DataFrame(
+                {
+                    "Open": [100.0],
+                    "Close": [101.0],
+                    "High": [102.0],
+                    "Low": [99.0],
+                    "Volume": [1000],
+                },
+                index=[pd.Timestamp("2024-01-01")],
+            ),
+        ]
+
+        result = get_prices("4979.TW", "2024-01-01", "2024-01-02")
+        assert len(result) == 1
+        assert result[0].close == 101.0
+        assert mock_download.call_count == 2
+        assert mock_download.call_args_list[0].args[0] == "4979.TW"
+        assert mock_download.call_args_list[1].args[0] == "4979.TWO"
+
+    @patch('src.tools.api._cache')
+    @patch('src.tools.api.yf.download')
+    def test_get_prices_handles_series_cell_values(self, mock_download, mock_cache):
+        mock_cache.get_prices.return_value = None
+
+        import pandas as pd
+
+        # Duplicate "Open" column forces row.get("Open") to return a Series.
+        mock_download.return_value = pd.DataFrame(
+            [[100.0, 100.5, 101.0, 102.0, 99.0, 1000]],
+            columns=["Open", "Open", "Close", "High", "Low", "Volume"],
+            index=[pd.Timestamp("2024-01-01")],
+        )
+
+        result = get_prices("AAPL", "2024-01-01", "2024-01-02")
+        assert len(result) == 1
+        assert result[0].open == 100.0
+        assert result[0].close == 101.0
 
     @patch('src.tools.api.time.sleep')
     @patch('src.tools.api.requests.get')

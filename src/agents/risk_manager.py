@@ -14,6 +14,13 @@ def risk_management_agent(state: AgentState, agent_id: str = "risk_management_ag
     data = state["data"]
     tickers = data["tickers"]
     api_key = get_api_key_from_state(state, "FINANCIAL_DATASETS_API_KEY")
+    raw_base_limit = state.get("metadata", {}).get("base_position_limit_pct", 0.20)
+    try:
+        base_position_limit_pct = float(raw_base_limit)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("base_position_limit_pct 必須是 0 到 1 之間的小數") from exc
+    if not (0 < base_position_limit_pct <= 1):
+        raise ValueError("base_position_limit_pct 必須介於 0（不含）到 1（含）之間")
     
     # Initialize risk analysis for each ticker
     risk_analysis = {}
@@ -25,7 +32,7 @@ def risk_management_agent(state: AgentState, agent_id: str = "risk_management_ag
     all_tickers = set(tickers) | set(portfolio.get("positions", {}).keys())
     
     for ticker in all_tickers:
-        progress.update_status(agent_id, ticker, "Fetching price data and calculating volatility")
+        progress.update_status(agent_id, ticker, "取得價格資料並計算波動度")
         
         prices = get_prices(
             ticker=ticker,
@@ -35,7 +42,7 @@ def risk_management_agent(state: AgentState, agent_id: str = "risk_management_ag
         )
 
         if not prices:
-            progress.update_status(agent_id, ticker, "Warning: No price data found")
+            progress.update_status(agent_id, ticker, "警告：找不到價格資料")
             volatility_data[ticker] = {
                 "daily_volatility": 0.05,  # Default fallback volatility (5% daily)
                 "annualized_volatility": 0.05 * np.sqrt(252),
@@ -62,10 +69,10 @@ def risk_management_agent(state: AgentState, agent_id: str = "risk_management_ag
             progress.update_status(
                 agent_id, 
                 ticker, 
-                f"Price: {current_price:.2f}, Ann. Vol: {volatility_metrics['annualized_volatility']:.1%}"
+                f"價格：{current_price:.2f}，年化波動：{volatility_metrics['annualized_volatility']:.1%}"
             )
         else:
-            progress.update_status(agent_id, ticker, "Warning: Insufficient price data")
+            progress.update_status(agent_id, ticker, "警告：價格資料不足")
             current_prices[ticker] = 0
             volatility_data[ticker] = {
                 "daily_volatility": 0.05,
@@ -100,19 +107,19 @@ def risk_management_agent(state: AgentState, agent_id: str = "risk_management_ag
             # Subtract market value of short positions
             total_portfolio_value -= position.get("short", 0) * current_prices[ticker]
     
-    progress.update_status(agent_id, None, f"Total portfolio value: {total_portfolio_value:.2f}")
+    progress.update_status(agent_id, None, f"投資組合總價值：{total_portfolio_value:.2f}")
 
     # Calculate volatility- and correlation-adjusted risk limits for each ticker
     for ticker in tickers:
-        progress.update_status(agent_id, ticker, "Calculating volatility- and correlation-adjusted limits")
+        progress.update_status(agent_id, ticker, "計算波動度與相關性調整後上限")
         
         if ticker not in current_prices or current_prices[ticker] <= 0:
-            progress.update_status(agent_id, ticker, "Failed: No valid price data")
+            progress.update_status(agent_id, ticker, "失敗：缺少有效價格資料")
             risk_analysis[ticker] = {
                 "remaining_position_limit": 0.0,
                 "current_price": 0.0,
                 "reasoning": {
-                    "error": "Missing price data for risk calculation"
+                    "error": "風險計算缺少價格資料"
                 }
             }
             continue
@@ -128,7 +135,8 @@ def risk_management_agent(state: AgentState, agent_id: str = "risk_management_ag
         
         # Volatility-adjusted limit pct
         vol_adjusted_limit_pct = calculate_volatility_adjusted_limit(
-            vol_data.get("annualized_volatility", 0.25)
+            vol_data.get("annualized_volatility", 0.25),
+            base_limit=base_position_limit_pct,
         )
 
         # Correlation adjustment
@@ -184,23 +192,24 @@ def risk_management_agent(state: AgentState, agent_id: str = "risk_management_ag
             "reasoning": {
                 "portfolio_value": float(total_portfolio_value),
                 "current_position_value": float(current_position_value),
-                "base_position_limit_pct": float(vol_adjusted_limit_pct),
+                "base_position_limit_pct": float(base_position_limit_pct),
+                "volatility_adjusted_limit_pct": float(vol_adjusted_limit_pct),
                 "correlation_multiplier": float(corr_multiplier),
                 "combined_position_limit_pct": float(combined_limit_pct),
                 "position_limit": float(position_limit),
                 "remaining_limit": float(remaining_position_limit),
                 "available_cash": float(portfolio.get("cash", 0)),
-                "risk_adjustment": f"Volatility x Correlation adjusted: {combined_limit_pct:.1%} (base {vol_adjusted_limit_pct:.1%})"
+                "risk_adjustment": f"波動度 × 相關性調整：{combined_limit_pct:.1%}（基準 {vol_adjusted_limit_pct:.1%}）"
             },
         }
         
         progress.update_status(
             agent_id, 
             ticker, 
-            f"Adj. limit: {combined_limit_pct:.1%}, Available: ${max_position_size:.0f}"
+            f"調整後上限：{combined_limit_pct:.1%}，可用額度：${max_position_size:.0f}"
         )
 
-    progress.update_status(agent_id, None, "Done")
+    progress.update_status(agent_id, None, "完成")
 
     message = HumanMessage(
         content=json.dumps(risk_analysis),
@@ -208,7 +217,7 @@ def risk_management_agent(state: AgentState, agent_id: str = "risk_management_ag
     )
 
     if state["metadata"]["show_reasoning"]:
-        show_agent_reasoning(risk_analysis, "Volatility-Adjusted Risk Management Agent")
+        show_agent_reasoning(risk_analysis, "波動度調整風險管理代理")
 
     # Add the signal to the analyst_signals list
     state["data"]["analyst_signals"][agent_id] = risk_analysis
@@ -267,18 +276,13 @@ def calculate_volatility_metrics(prices_df: pd.DataFrame, lookback_days: int = 6
     }
 
 
-def calculate_volatility_adjusted_limit(annualized_volatility: float) -> float:
+def calculate_volatility_adjusted_limit(annualized_volatility: float, base_limit: float = 0.20) -> float:
     """
     Calculate position limit as percentage of portfolio based on volatility.
-    
-    Logic:
-    - Low volatility (<15%): Up to 25% allocation
-    - Medium volatility (15-30%): 15-20% allocation  
-    - High volatility (>30%): 10-15% allocation
-    - Very high volatility (>50%): Max 10% allocation
+
+    Uses a configurable base limit and then applies a volatility multiplier.
+    With default base_limit=0.20, the effective range is roughly 5%~25%.
     """
-    base_limit = 0.20  # 20% baseline
-    
     if annualized_volatility < 0.15:  # Low volatility
         # Allow higher allocation for stable stocks
         vol_multiplier = 1.25  # Up to 25%

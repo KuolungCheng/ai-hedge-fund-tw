@@ -19,10 +19,10 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    image: ai-hedge-fund
+    image: ai-hedge-fund-tw
     volumes:
       - ../.env:/app/.env
-    command: python src/main.py --ticker AAPL,MSFT,NVDA
+    command: python -m src.main --tickers AAPL,MSFT,NVDA
     environment:
       PYTHONUNBUFFERED: "1"
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
@@ -34,10 +34,10 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    image: ai-hedge-fund
+    image: ai-hedge-fund-tw
     volumes:
       - ../.env:/app/.env
-    command: python src/main.py --ticker AAPL,MSFT,NVDA --show-reasoning
+    command: python -m src.main --tickers AAPL,MSFT,NVDA --show-reasoning
     environment:
       PYTHONUNBUFFERED: "1"
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
@@ -49,10 +49,10 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    image: ai-hedge-fund
+    image: ai-hedge-fund-tw
     volumes:
       - ../.env:/app/.env
-    command: python src/main.py --ticker AAPL,MSFT,NVDA --ollama
+    command: python -m src.main --tickers AAPL,MSFT,NVDA --ollama
     environment:
       PYTHONUNBUFFERED: "1"
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
@@ -64,10 +64,10 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    image: ai-hedge-fund
+    image: ai-hedge-fund-tw
     volumes:
       - ../.env:/app/.env
-    command: python src/backtester.py --ticker AAPL,MSFT,NVDA
+    command: python -m src.backtester --tickers AAPL,MSFT,NVDA
     environment:
       PYTHONUNBUFFERED: "1"
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
@@ -79,10 +79,10 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    image: ai-hedge-fund
+    image: ai-hedge-fund-tw
     volumes:
       - ../.env:/app/.env
-    command: python src/backtester.py --ticker AAPL,MSFT,NVDA --ollama
+    command: python -m src.backtester --tickers AAPL,MSFT,NVDA --ollama
     environment:
       PYTHONUNBUFFERED: "1"
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}

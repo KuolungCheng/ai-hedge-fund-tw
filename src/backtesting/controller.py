@@ -20,6 +20,7 @@ class AgentController:
         model_name: str,
         model_provider: str,
         selected_analysts: Sequence[str] | None,
+        base_position_limit_pct: float = 0.20,
     ) -> AgentOutput:
         # Ensure we pass a plain snapshot dict to preserve legacy expectations
         if isinstance(portfolio, Portfolio):
@@ -35,6 +36,7 @@ class AgentController:
             model_name=model_name,
             model_provider=model_provider,
             selected_analysts=list(selected_analysts) if selected_analysts is not None else None,
+            base_position_limit_pct=base_position_limit_pct,
         )
 
         # Normalize outputs to avoid None/missing keys

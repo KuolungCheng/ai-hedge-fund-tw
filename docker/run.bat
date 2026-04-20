@@ -192,7 +192,7 @@ if !ERRORLEVEL! EQU 0 (
 
 :: Build the Docker image if 'build' command is provided
 if "!COMMAND!"=="build" (
-    docker build -t ai-hedge-fund -f Dockerfile ..
+    docker build -t ai-hedge-fund-tw -f Dockerfile ..
     exit /b 0
 )
 
@@ -290,12 +290,12 @@ if not exist .env (
 
 :: Set script path and parameters based on command
 if "!COMMAND!"=="main" (
-    set SCRIPT_PATH=src/main.py
+    set SCRIPT_MODULE=src.main
     if "!COMMAND!"=="main" (
         set INITIAL_PARAM=--initial-cash !INITIAL_AMOUNT!
     )
 ) else if "!COMMAND!"=="backtest" (
-    set SCRIPT_PATH=src/backtester.py
+    set SCRIPT_MODULE=src.backtester
     if "!COMMAND!"=="backtest" (
         set INITIAL_PARAM=--initial-capital !INITIAL_AMOUNT!
     )
@@ -373,22 +373,22 @@ if not "!USE_OLLAMA!"=="" (
 :continue_ollama
     )
 
-    docker images -q ai-hedge-fund 2>nul | findstr /r /c:"^..*$" >nul
+    docker images -q ai-hedge-fund-tw 2>nul | findstr /r /c:"^..*$" >nul
     if !ERRORLEVEL! NEQ 0 (
         echo Building AI Hedge Fund image...
-        docker build -t ai-hedge-fund -f Dockerfile ..
+        docker build -t ai-hedge-fund-tw -f Dockerfile ..
     )
 
     echo Running AI Hedge Fund with Ollama using Docker Compose...
 
     if "!COMMAND!"=="main" (
         if not "!SHOW_REASONING!"=="" (
-            !COMPOSE_CMD! run --rm hedge-fund-reasoning python src/main.py --ticker !TICKER! !COMMAND_OVERRIDE! !SHOW_REASONING! --ollama
+            !COMPOSE_CMD! run --rm hedge-fund-reasoning python -m src.main --tickers !TICKER! !COMMAND_OVERRIDE! !SHOW_REASONING! --ollama
         ) else (
-            !COMPOSE_CMD! run --rm hedge-fund-ollama python src/main.py --ticker !TICKER! !COMMAND_OVERRIDE! --ollama
+            !COMPOSE_CMD! run --rm hedge-fund-ollama python -m src.main --tickers !TICKER! !COMMAND_OVERRIDE! --ollama
         )
     ) else if "!COMMAND!"=="backtest" (
-        !COMPOSE_CMD! run --rm backtester-ollama python src/backtester.py --ticker !TICKER! !COMMAND_OVERRIDE! !SHOW_REASONING! --ollama
+        !COMPOSE_CMD! run --rm backtester-ollama python -m src.backtester --tickers !TICKER! !COMMAND_OVERRIDE! !SHOW_REASONING! --ollama
     )
 
     exit /b 0
@@ -399,7 +399,7 @@ if not "!USE_OLLAMA!"=="" (
 set CMD=docker run -it --rm -v %cd%\.env:/app/.env
 
 :: Add the command
-set CMD=!CMD! ai-hedge-fund python !SCRIPT_PATH! --ticker !TICKER! !START_DATE! !END_DATE! !INITIAL_PARAM! --margin-requirement !MARGIN_REQUIREMENT! !SHOW_REASONING!
+set CMD=!CMD! ai-hedge-fund-tw python -m !SCRIPT_MODULE! --tickers !TICKER! !START_DATE! !END_DATE! !INITIAL_PARAM! --margin-requirement !MARGIN_REQUIREMENT! !SHOW_REASONING!
 
 :: Run the command
 echo Running: !CMD!

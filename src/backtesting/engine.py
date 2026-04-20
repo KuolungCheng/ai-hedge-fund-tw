@@ -44,6 +44,7 @@ class BacktestEngine:
         model_provider: str,
         selected_analysts: list[str] | None,
         initial_margin_requirement: float,
+        base_position_limit_pct: float = 0.20,
     ) -> None:
         self._agent = agent
         self._tickers = tickers
@@ -53,6 +54,7 @@ class BacktestEngine:
         self._model_name = model_name
         self._model_provider = model_provider
         self._selected_analysts = selected_analysts
+        self._base_position_limit_pct = float(base_position_limit_pct)
 
         self._portfolio = Portfolio(
             tickers=tickers,
@@ -138,6 +140,7 @@ class BacktestEngine:
                 model_name=self._model_name,
                 model_provider=self._model_provider,
                 selected_analysts=self._selected_analysts,
+                base_position_limit_pct=self._base_position_limit_pct,
             )
             decisions = agent_output["decisions"]
 

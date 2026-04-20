@@ -1,34 +1,173 @@
 from colorama import Fore, Style
 from tabulate import tabulate
-from .analysts import ANALYST_ORDER
+from .analysts import ANALYST_CONFIG, ANALYST_ORDER
 import os
 import json
+from typing import Any
+
+ANALYST_KEY_TO_AGENT_IDS = {
+    "airforce": ["airforce_agent", "valuation_analyst_agent"],
+    "discount": ["discount_agent", "growth_analyst_agent"],
+    "huang": ["huang_agent", "fundamentals_analyst_agent"],
+    "cancer": ["cancer_agent", "technical_analyst_agent"],
+    "wang": ["wang_agent", "sentiment_analyst_agent"],
+    "hindsight": ["hindsight_agent", "news_sentiment_agent"],
+}
+
+AGENT_ID_TO_ANALYST_KEY = {
+    agent_id: analyst_key
+    for analyst_key, agent_ids in ANALYST_KEY_TO_AGENT_IDS.items()
+    for agent_id in agent_ids
+}
+
+BEARISH_SCORE_MAX = 40
+NEUTRAL_SCORE_MAX = 70
+
+
+def get_action_color(action: str) -> str:
+    return {
+        "BUY": Fore.GREEN,
+        "SELL": Fore.RED,
+        "HOLD": Fore.YELLOW,
+        "COVER": Fore.GREEN,
+        "SHORT": Fore.RED,
+    }.get(action.upper(), Fore.WHITE)
+
+
+def get_action_label(action: str) -> str:
+    return {
+        "BUY": "買進",
+        "SELL": "賣出",
+        "HOLD": "持有",
+        "COVER": "回補",
+        "SHORT": "放空",
+    }.get(action.upper(), action.upper())
+
+
+def get_signal_label(signal: str) -> str:
+    return {
+        "BULLISH": "看多",
+        "BEARISH": "看空",
+        "NEUTRAL": "中立",
+    }.get(signal.upper(), signal.upper())
+
+
+def get_signal_color(signal: str) -> str:
+    return {
+        "BULLISH": Fore.GREEN,
+        "BEARISH": Fore.RED,
+        "NEUTRAL": Fore.YELLOW,
+    }.get(signal.upper(), Fore.WHITE)
+
+
+def _normalize_confidence(confidence: Any) -> float:
+    try:
+        value = float(confidence)
+    except (TypeError, ValueError):
+        return 0.0
+    return max(0.0, min(100.0, value))
+
+
+def get_score_label(score: float) -> str:
+    if score <= BEARISH_SCORE_MAX:
+        return "看空"
+    if score <= NEUTRAL_SCORE_MAX:
+        return "中立"
+    return "看多"
+
+
+def get_score_color(score: float) -> str:
+    if score <= BEARISH_SCORE_MAX:
+        return Fore.RED
+    if score <= NEUTRAL_SCORE_MAX:
+        return Fore.YELLOW
+    return Fore.GREEN
+
+
+def get_analyst_score(signal: str, confidence: Any) -> int:
+    normalized_signal = str(signal or "").upper()
+    normalized_conf = _normalize_confidence(confidence)
+
+    if normalized_signal == "BULLISH":
+        # 看多越有把握，分數越接近 100
+        score = 50.0 + (normalized_conf / 2.0)
+    elif normalized_signal == "BEARISH":
+        # 看空越有把握，分數越接近 0
+        score = 50.0 - (normalized_conf / 2.0)
+    else:
+        # 中立預設落在中間區間
+        score = 55.0
+
+    return int(round(max(0.0, min(100.0, score))))
+
+
+def get_analyst_display_name(agent_id: str) -> str:
+    if agent_id == "risk_management_agent":
+        return "風險管理"
+
+    analyst_key = AGENT_ID_TO_ANALYST_KEY.get(agent_id, agent_id.replace("_agent", ""))
+    return ANALYST_CONFIG.get(analyst_key, {}).get(
+        "display_name",
+        analyst_key.replace("_", " ").title(),
+    )
+
+
+def get_analyst_signal_for_ticker(analyst_signals: dict, ticker: str, analyst_key: str) -> dict | None:
+    for agent_id in ANALYST_KEY_TO_AGENT_IDS.get(analyst_key, [f"{analyst_key}_agent"]):
+        if ticker in analyst_signals.get(agent_id, {}):
+            return analyst_signals[agent_id][ticker]
+    return None
+
+
+def localize_reasoning_text(text: str) -> str:
+    if not text:
+        return text
+
+    replacements = {
+        "All fundamentals and valuation signals bearish at max confidence.": "基本面與估值訊號皆為強烈看空（最高信心）。",
+        "All fundamentals and valuation signals bullish at max confidence.": "基本面與估值訊號皆為強烈看多（最高信心）。",
+        "bearish": "看空",
+        "bullish": "看多",
+        "neutral": "中立",
+        "fundamentals": "基本面",
+        "valuation": "估值",
+        "signals": "訊號",
+        "max confidence": "最高信心",
+        "confidence": "信心",
+    }
+
+    localized = text
+    for source, target in replacements.items():
+        localized = localized.replace(source, target)
+        localized = localized.replace(source.capitalize(), target)
+    return localized
 
 
 def sort_agent_signals(signals):
-    """Sort agent signals in a consistent order."""
+    """依固定順序排序代理訊號。"""
     # Create order mapping from ANALYST_ORDER
     analyst_order = {display: idx for idx, (display, _) in enumerate(ANALYST_ORDER)}
-    analyst_order["Risk Management"] = len(ANALYST_ORDER)  # Add Risk Management at the end
+    analyst_order["風險管理"] = len(ANALYST_ORDER)  # 風險管理固定放最後
+    analyst_order["Risk Management"] = len(ANALYST_ORDER)  # 相容舊文字
 
     return sorted(signals, key=lambda x: analyst_order.get(x[0], 999))
 
 
 def print_trading_output(result: dict) -> None:
     """
-    Print formatted trading results with colored tables for multiple tickers.
+    以彩色表格印出多檔股票的交易結果。
 
     Args:
-        result (dict): Dictionary containing decisions and analyst signals for multiple tickers
+        result (dict): 含多檔股票決策與分析訊號的資料
     """
     decisions = result.get("decisions")
     if not decisions:
-        print(f"{Fore.RED}No trading decisions available{Style.RESET_ALL}")
+        print(f"{Fore.RED}目前沒有可用的交易決策{Style.RESET_ALL}")
         return
 
     # Print decisions for each ticker
     for ticker, decision in decisions.items():
-        print(f"\n{Fore.WHITE}{Style.BRIGHT}Analysis for {Fore.CYAN}{ticker}{Style.RESET_ALL}")
+        print(f"\n{Fore.WHITE}{Style.BRIGHT}{Fore.CYAN}{ticker}{Style.RESET_ALL}{Fore.WHITE}{Style.BRIGHT} 分析結果{Style.RESET_ALL}")
         print(f"{Fore.WHITE}{Style.BRIGHT}{'=' * 50}{Style.RESET_ALL}")
 
         # Prepare analyst signals table for this ticker
@@ -42,15 +181,12 @@ def print_trading_output(result: dict) -> None:
                 continue
 
             signal = signals[ticker]
-            agent_name = agent.replace("_agent", "").replace("_", " ").title()
+            agent_name = get_analyst_display_name(agent)
             signal_type = signal.get("signal", "").upper()
             confidence = signal.get("confidence", 0)
 
-            signal_color = {
-                "BULLISH": Fore.GREEN,
-                "BEARISH": Fore.RED,
-                "NEUTRAL": Fore.YELLOW,
-            }.get(signal_type, Fore.WHITE)
+            signal_color = get_signal_color(signal_type)
+            signal_label = get_signal_label(signal_type)
             
             # Get reasoning if available
             reasoning_str = ""
@@ -59,7 +195,7 @@ def print_trading_output(result: dict) -> None:
                 
                 # Handle different types of reasoning (string, dict, etc.)
                 if isinstance(reasoning, str):
-                    reasoning_str = reasoning
+                    reasoning_str = localize_reasoning_text(reasoning)
                 elif isinstance(reasoning, dict):
                     # Convert dict to string representation
                     reasoning_str = json.dumps(reasoning, indent=2)
@@ -89,7 +225,7 @@ def print_trading_output(result: dict) -> None:
             table_data.append(
                 [
                     f"{Fore.CYAN}{agent_name}{Style.RESET_ALL}",
-                    f"{signal_color}{signal_type}{Style.RESET_ALL}",
+                    f"{signal_color}{signal_label}{Style.RESET_ALL}",
                     f"{Fore.WHITE}{confidence}%{Style.RESET_ALL}",
                     f"{Fore.WHITE}{reasoning_str}{Style.RESET_ALL}",
                 ]
@@ -98,80 +234,27 @@ def print_trading_output(result: dict) -> None:
         # Sort the signals according to the predefined order
         table_data = sort_agent_signals(table_data)
 
-        print(f"\n{Fore.WHITE}{Style.BRIGHT}AGENT ANALYSIS:{Style.RESET_ALL} [{Fore.CYAN}{ticker}{Style.RESET_ALL}]")
+        print(f"\n{Fore.WHITE}{Style.BRIGHT}代理分析：{Style.RESET_ALL}[{Fore.CYAN}{ticker}{Style.RESET_ALL}]")
         print(
             tabulate(
                 table_data,
-                headers=[f"{Fore.WHITE}Agent", "Signal", "Confidence", "Reasoning"],
+                headers=[f"{Fore.WHITE}代理", "訊號", "信心分數", "推理依據"],
                 tablefmt="grid",
                 colalign=("left", "center", "right", "left"),
             )
         )
 
-        # Print Trading Decision Table
-        action = decision.get("action", "").upper()
-        action_color = {
-            "BUY": Fore.GREEN,
-            "SELL": Fore.RED,
-            "HOLD": Fore.YELLOW,
-            "COVER": Fore.GREEN,
-            "SHORT": Fore.RED,
-        }.get(action, Fore.WHITE)
-
-        # Get reasoning and format it
-        reasoning = decision.get("reasoning", "")
-        # Wrap long reasoning text to make it more readable
-        wrapped_reasoning = ""
-        if reasoning:
-            current_line = ""
-            # Use a fixed width of 60 characters to match the table column width
-            max_line_length = 60
-            for word in reasoning.split():
-                if len(current_line) + len(word) + 1 > max_line_length:
-                    wrapped_reasoning += current_line + "\n"
-                    current_line = word
-                else:
-                    if current_line:
-                        current_line += " " + word
-                    else:
-                        current_line = word
-            if current_line:
-                wrapped_reasoning += current_line
-
-        decision_data = [
-            ["Action", f"{action_color}{action}{Style.RESET_ALL}"],
-            ["Quantity", f"{action_color}{decision.get('quantity')}{Style.RESET_ALL}"],
-            [
-                "Confidence",
-                f"{Fore.WHITE}{decision.get('confidence'):.1f}%{Style.RESET_ALL}",
-            ],
-            ["Reasoning", f"{Fore.WHITE}{wrapped_reasoning}{Style.RESET_ALL}"],
-        ]
-        
-        print(f"\n{Fore.WHITE}{Style.BRIGHT}TRADING DECISION:{Style.RESET_ALL} [{Fore.CYAN}{ticker}{Style.RESET_ALL}]")
-        print(tabulate(decision_data, tablefmt="grid", colalign=("left", "left")))
-
     # Print Portfolio Summary
-    print(f"\n{Fore.WHITE}{Style.BRIGHT}PORTFOLIO SUMMARY:{Style.RESET_ALL}")
+    print(f"\n{Fore.WHITE}{Style.BRIGHT}投資組合總覽：{Style.RESET_ALL}")
     portfolio_data = []
     
-    # Extract portfolio manager reasoning (common for all tickers)
-    portfolio_manager_reasoning = None
-    for ticker, decision in decisions.items():
-        if decision.get("reasoning"):
-            portfolio_manager_reasoning = decision.get("reasoning")
-            break
-            
+    strategy_data = []
+
     analyst_signals = result.get("analyst_signals", {})
     for ticker, decision in decisions.items():
         action = decision.get("action", "").upper()
-        action_color = {
-            "BUY": Fore.GREEN,
-            "SELL": Fore.RED,
-            "HOLD": Fore.YELLOW,
-            "COVER": Fore.GREEN,
-            "SHORT": Fore.RED,
-        }.get(action, Fore.WHITE)
+        action_color = get_action_color(action)
+        action_label = get_action_label(action)
 
         # Calculate analyst signal counts
         bullish_count = 0
@@ -191,8 +274,7 @@ def print_trading_output(result: dict) -> None:
         portfolio_data.append(
             [
                 f"{Fore.CYAN}{ticker}{Style.RESET_ALL}",
-                f"{action_color}{action}{Style.RESET_ALL}",
-                f"{action_color}{decision.get('quantity')}{Style.RESET_ALL}",
+                f"{action_color}{action_label}{Style.RESET_ALL}",
                 f"{Fore.WHITE}{decision.get('confidence'):.1f}%{Style.RESET_ALL}",
                 f"{Fore.GREEN}{bullish_count}{Style.RESET_ALL}",
                 f"{Fore.RED}{bearish_count}{Style.RESET_ALL}",
@@ -200,14 +282,28 @@ def print_trading_output(result: dict) -> None:
             ]
         )
 
+        reasoning = decision.get("reasoning")
+        if reasoning:
+            if isinstance(reasoning, str):
+                reasoning_text = localize_reasoning_text(reasoning)
+            elif isinstance(reasoning, dict):
+                reasoning_text = json.dumps(reasoning, ensure_ascii=False)
+            else:
+                reasoning_text = str(reasoning)
+            strategy_data.append(
+                [
+                    f"{Fore.CYAN}{ticker}{Style.RESET_ALL}",
+                    f"{Fore.WHITE}{reasoning_text}{Style.RESET_ALL}",
+                ]
+            )
+
     headers = [
-        f"{Fore.WHITE}Ticker",
-        f"{Fore.WHITE}Action",
-        f"{Fore.WHITE}Quantity",
-        f"{Fore.WHITE}Confidence",
-        f"{Fore.WHITE}Bullish",
-        f"{Fore.WHITE}Bearish",
-        f"{Fore.WHITE}Neutral",
+        f"{Fore.WHITE}股票代碼",
+        f"{Fore.WHITE}動作",
+        f"{Fore.WHITE}信心分數",
+        f"{Fore.WHITE}看多",
+        f"{Fore.WHITE}看空",
+        f"{Fore.WHITE}中立",
     ]
     
     # Print the portfolio summary table
@@ -216,46 +312,54 @@ def print_trading_output(result: dict) -> None:
             portfolio_data,
             headers=headers,
             tablefmt="grid",
-            colalign=("left", "center", "right", "right", "center", "center", "center"),
+            colalign=("left", "center", "right", "center", "center", "center"),
         )
     )
-    
-    # Print Portfolio Manager's reasoning if available
-    if portfolio_manager_reasoning:
-        # Handle different types of reasoning (string, dict, etc.)
-        reasoning_str = ""
-        if isinstance(portfolio_manager_reasoning, str):
-            reasoning_str = portfolio_manager_reasoning
-        elif isinstance(portfolio_manager_reasoning, dict):
-            # Convert dict to string representation
-            reasoning_str = json.dumps(portfolio_manager_reasoning, indent=2)
-        else:
-            # Convert any other type to string
-            reasoning_str = str(portfolio_manager_reasoning)
-            
-        # Wrap long reasoning text to make it more readable
-        wrapped_reasoning = ""
-        current_line = ""
-        # Use a fixed width of 60 characters to match the table column width
-        max_line_length = 60
-        for word in reasoning_str.split():
-            if len(current_line) + len(word) + 1 > max_line_length:
-                wrapped_reasoning += current_line + "\n"
-                current_line = word
-            else:
-                if current_line:
-                    current_line += " " + word
-                else:
-                    current_line = word
-        if current_line:
-            wrapped_reasoning += current_line
-            
-        print(f"\n{Fore.WHITE}{Style.BRIGHT}Portfolio Strategy:{Style.RESET_ALL}")
-        print(f"{Fore.CYAN}{wrapped_reasoning}{Style.RESET_ALL}")
+
+    # Print per-analyst 0-100 score in portfolio summary
+    analyst_score_rows = []
+    analyst_score_headers = [f"{Fore.WHITE}股票代碼"] + [f"{Fore.WHITE}{display}" for display, _ in ANALYST_ORDER]
+    for ticker in decisions.keys():
+        row = [f"{Fore.CYAN}{ticker}{Style.RESET_ALL}"]
+        for _, analyst_key in ANALYST_ORDER:
+            signal_payload = get_analyst_signal_for_ticker(analyst_signals, ticker, analyst_key)
+            if not signal_payload:
+                row.append("-")
+                continue
+            signal_raw = str(signal_payload.get("signal", "")).upper()
+            confidence = signal_payload.get("confidence")
+            score = get_analyst_score(signal_raw, confidence)
+            score_label = get_score_label(score)
+            score_color = get_score_color(score)
+            row.append(f"{score_color}{score_label} {score}{Style.RESET_ALL}")
+        analyst_score_rows.append(row)
+
+    if analyst_score_rows:
+        print(f"\n{Fore.WHITE}{Style.BRIGHT}分析師個別評分：{Style.RESET_ALL}")
+        print(
+            tabulate(
+                analyst_score_rows,
+                headers=analyst_score_headers,
+                tablefmt="grid",
+                colalign=("left", "center", "center", "center", "center", "center", "center"),
+            )
+        )
+     
+    # Print per-ticker portfolio strategy to avoid dropping multi-ticker reasoning
+    if strategy_data:
+        print(f"\n{Fore.WHITE}{Style.BRIGHT}投資組合策略：{Style.RESET_ALL}")
+        print(
+            tabulate(
+                strategy_data,
+                headers=[f"{Fore.WHITE}股票代碼", f"{Fore.WHITE}策略說明"],
+                tablefmt="grid",
+                colalign=("left", "left"),
+            )
+        )
 
 
 def print_backtest_results(table_rows: list) -> None:
-    """Print the backtest results in a nicely formatted table"""
+    """以易讀表格印出回測結果"""
     # Clear the screen
     os.system("cls" if os.name == "nt" else "clear")
 
@@ -264,7 +368,7 @@ def print_backtest_results(table_rows: list) -> None:
     summary_rows = []
 
     for row in table_rows:
-        if isinstance(row[1], str) and "PORTFOLIO SUMMARY" in row[1]:
+        if isinstance(row[1], str) and ("PORTFOLIO SUMMARY" in row[1] or "投資組合總覽" in row[1]):
             summary_rows.append(row)
         else:
             ticker_rows.append(row)
@@ -273,27 +377,27 @@ def print_backtest_results(table_rows: list) -> None:
     if summary_rows:
         # Pick the most recent summary by date (YYYY-MM-DD)
         latest_summary = max(summary_rows, key=lambda r: r[0])
-        print(f"\n{Fore.WHITE}{Style.BRIGHT}PORTFOLIO SUMMARY:{Style.RESET_ALL}")
+        print(f"\n{Fore.WHITE}{Style.BRIGHT}投資組合總覽：{Style.RESET_ALL}")
 
         # Adjusted indexes after adding Long/Short Shares
         position_str = latest_summary[7].split("$")[1].split(Style.RESET_ALL)[0].replace(",", "")
         cash_str     = latest_summary[8].split("$")[1].split(Style.RESET_ALL)[0].replace(",", "")
         total_str    = latest_summary[9].split("$")[1].split(Style.RESET_ALL)[0].replace(",", "")
 
-        print(f"Cash Balance: {Fore.CYAN}${float(cash_str):,.2f}{Style.RESET_ALL}")
-        print(f"Total Position Value: {Fore.YELLOW}${float(position_str):,.2f}{Style.RESET_ALL}")
-        print(f"Total Value: {Fore.WHITE}${float(total_str):,.2f}{Style.RESET_ALL}")
-        print(f"Portfolio Return: {latest_summary[10]}")
+        print(f"現金餘額：{Fore.CYAN}${float(cash_str):,.2f}{Style.RESET_ALL}")
+        print(f"持倉總市值：{Fore.YELLOW}${float(position_str):,.2f}{Style.RESET_ALL}")
+        print(f"資產總值：{Fore.WHITE}${float(total_str):,.2f}{Style.RESET_ALL}")
+        print(f"組合報酬率：{latest_summary[10]}")
         if len(latest_summary) > 14 and latest_summary[14]:
-            print(f"Benchmark Return: {latest_summary[14]}")
+            print(f"基準報酬率：{latest_summary[14]}")
 
         # Display performance metrics if available
         if latest_summary[11]:  # Sharpe ratio
-            print(f"Sharpe Ratio: {latest_summary[11]}")
+            print(f"夏普值：{latest_summary[11]}")
         if latest_summary[12]:  # Sortino ratio
-            print(f"Sortino Ratio: {latest_summary[12]}")
+            print(f"索提諾值：{latest_summary[12]}")
         if latest_summary[13]:  # Max drawdown
-            print(f"Max Drawdown: {latest_summary[13]}")
+            print(f"最大回撤：{latest_summary[13]}")
 
     # Add vertical spacing
     print("\n" * 2)
@@ -303,14 +407,14 @@ def print_backtest_results(table_rows: list) -> None:
         tabulate(
             ticker_rows,
             headers=[
-                "Date",
-                "Ticker",
-                "Action",
-                "Quantity",
-                "Price",
-                "Long Shares",
-                "Short Shares",
-                "Position Value",
+                "日期",
+                "股票代碼",
+                "動作",
+                "數量",
+                "價格",
+                "多頭股數",
+                "空頭股數",
+                "持倉市值",
             ],
             tablefmt="grid",
             colalign=(
@@ -349,15 +453,10 @@ def format_backtest_row(
     max_drawdown: float = None,
     benchmark_return_pct: float | None = None,
 ) -> list[any]:
-    """Format a row for the backtest results table"""
+    """格式化單筆回測資料列"""
     # Color the action
-    action_color = {
-        "BUY": Fore.GREEN,
-        "COVER": Fore.GREEN,
-        "SELL": Fore.RED,
-        "SHORT": Fore.RED,
-        "HOLD": Fore.WHITE,
-    }.get(action.upper(), Fore.WHITE)
+    action_color = get_action_color(action)
+    action_label = get_action_label(action)
 
     if is_summary:
         return_color = Fore.GREEN if return_pct >= 0 else Fore.RED
@@ -367,7 +466,7 @@ def format_backtest_row(
             benchmark_str = f"{bench_color}{benchmark_return_pct:+.2f}%{Style.RESET_ALL}"
         return [
             date,
-            f"{Fore.WHITE}{Style.BRIGHT}PORTFOLIO SUMMARY{Style.RESET_ALL}",
+            f"{Fore.WHITE}{Style.BRIGHT}投資組合總覽{Style.RESET_ALL}",
             "",  # Action
             "",  # Quantity
             "",  # Price
@@ -386,7 +485,7 @@ def format_backtest_row(
         return [
             date,
             f"{Fore.CYAN}{ticker}{Style.RESET_ALL}",
-            f"{action_color}{action.upper()}{Style.RESET_ALL}",
+            f"{action_color}{action_label}{Style.RESET_ALL}",
             f"{action_color}{quantity:,.0f}{Style.RESET_ALL}",
             f"{Fore.WHITE}{price:,.2f}{Style.RESET_ALL}",
             f"{Fore.GREEN}{long_shares:,.0f}{Style.RESET_ALL}",   # Long Shares

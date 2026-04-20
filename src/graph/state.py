@@ -19,7 +19,7 @@ class AgentState(TypedDict):
 
 
 def show_agent_reasoning(output, agent_name):
-    print(f"\n{'=' * 10} {agent_name.center(28)} {'=' * 10}")
+    print(f"\n{'=' * 10} {agent_name.center(28)} 推理內容 {'=' * 10}")
 
     def convert_to_serializable(obj):
         if hasattr(obj, "to_dict"):  # Handle Pandas Series/DataFrame

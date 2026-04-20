@@ -14,27 +14,27 @@ def run_backtest(backtester: BacktestEngine) -> PerformanceMetrics | None:
     """Run the backtest with graceful KeyboardInterrupt handling."""
     try:
         performance_metrics = backtester.run_backtest()
-        print(f"\n{Fore.GREEN}Backtest completed successfully!{Style.RESET_ALL}")
+        print(f"\n{Fore.GREEN}回測已成功完成！{Style.RESET_ALL}")
         return performance_metrics
     except KeyboardInterrupt:
-        print(f"\n\n{Fore.YELLOW}Backtest interrupted by user.{Style.RESET_ALL}")
+        print(f"\n\n{Fore.YELLOW}使用者中斷了回測流程。{Style.RESET_ALL}")
         
         # Try to show any partial results that were computed
         try:
             portfolio_values = backtester.get_portfolio_values()
             if len(portfolio_values) > 1:
-                print(f"{Fore.GREEN}Partial results available.{Style.RESET_ALL}")
+                print(f"{Fore.GREEN}已產生部分結果。{Style.RESET_ALL}")
                 
                 # Show basic summary from the available portfolio values
                 first_value = portfolio_values[0]["Portfolio Value"]
                 last_value = portfolio_values[-1]["Portfolio Value"]
                 total_return = ((last_value - first_value) / first_value) * 100
                 
-                print(f"{Fore.CYAN}Initial Portfolio Value: ${first_value:,.2f}{Style.RESET_ALL}")
-                print(f"{Fore.CYAN}Final Portfolio Value: ${last_value:,.2f}{Style.RESET_ALL}")
-                print(f"{Fore.CYAN}Total Return: {total_return:+.2f}%{Style.RESET_ALL}")
+                print(f"{Fore.CYAN}初始資產總值：${first_value:,.2f}{Style.RESET_ALL}")
+                print(f"{Fore.CYAN}最終資產總值：${last_value:,.2f}{Style.RESET_ALL}")
+                print(f"{Fore.CYAN}總報酬率：{total_return:+.2f}%{Style.RESET_ALL}")
         except Exception as e:
-            print(f"{Fore.RED}Could not generate partial results: {str(e)}{Style.RESET_ALL}")
+            print(f"{Fore.RED}無法產生部分結果：{str(e)}{Style.RESET_ALL}")
         
         sys.exit(0)
 
@@ -42,7 +42,7 @@ def run_backtest(backtester: BacktestEngine) -> PerformanceMetrics | None:
 ### Run the Backtest #####
 if __name__ == "__main__":
     inputs = parse_cli_inputs(
-        description="Run backtesting simulation",
+        description="執行回測模擬",
         require_tickers=False,
         default_months_back=1,
         include_graph_flag=False,
@@ -60,6 +60,7 @@ if __name__ == "__main__":
         model_provider=inputs.model_provider,
         selected_analysts=inputs.selected_analysts,
         initial_margin_requirement=inputs.margin_requirement,
+        base_position_limit_pct=inputs.base_position_limit_pct,
     )
 
     # Run the backtest with graceful exit handling

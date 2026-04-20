@@ -162,7 +162,7 @@ fi
 
 # Build the Docker image if 'build' command is provided
 if [ "$COMMAND" = "build" ]; then
-  docker build -t ai-hedge-fund -f Dockerfile ..
+  docker build -t ai-hedge-fund-tw -f Dockerfile ..
   exit 0
 fi
 
@@ -255,12 +255,12 @@ fi
 
 # Set script path and parameters based on command
 if [ "$COMMAND" = "main" ]; then
-  SCRIPT_PATH="src/main.py"
+  SCRIPT_MODULE="src.main"
   if [ "$COMMAND" = "main" ]; then
     INITIAL_PARAM="--initial-cash $INITIAL_AMOUNT"
   fi
 elif [ "$COMMAND" = "backtest" ]; then
-  SCRIPT_PATH="src/backtester.py"
+  SCRIPT_MODULE="src.backtester"
   if [ "$COMMAND" = "backtest" ]; then
     INITIAL_PARAM="--initial-capital $INITIAL_AMOUNT"
   fi
@@ -341,21 +341,21 @@ if [ -n "$USE_OLLAMA" ]; then
     fi
   fi
 
-  if [[ "$(docker images -q ai-hedge-fund 2> /dev/null)" == "" ]]; then
+  if [[ "$(docker images -q ai-hedge-fund-tw 2> /dev/null)" == "" ]]; then
     echo "Building AI Hedge Fund image..."
-    docker build -t ai-hedge-fund -f Dockerfile ..
+    docker build -t ai-hedge-fund-tw -f Dockerfile ..
   fi
 
   echo "Running AI Hedge Fund with Ollama using Docker Compose..."
 
   if [ "$COMMAND" = "main" ]; then
     if [ -n "$SHOW_REASONING" ]; then
-      $COMPOSE_CMD $GPU_CONFIG run --rm hedge-fund-reasoning python src/main.py --ticker $TICKER $COMMAND_OVERRIDE $SHOW_REASONING --ollama
+      $COMPOSE_CMD $GPU_CONFIG run --rm hedge-fund-reasoning python -m src.main --tickers $TICKER $COMMAND_OVERRIDE $SHOW_REASONING --ollama
     else
-      $COMPOSE_CMD $GPU_CONFIG run --rm hedge-fund-ollama python src/main.py --ticker $TICKER $COMMAND_OVERRIDE --ollama
+      $COMPOSE_CMD $GPU_CONFIG run --rm hedge-fund-ollama python -m src.main --tickers $TICKER $COMMAND_OVERRIDE --ollama
     fi
   elif [ "$COMMAND" = "backtest" ]; then
-    $COMPOSE_CMD $GPU_CONFIG run --rm backtester-ollama python src/backtester.py --ticker $TICKER $COMMAND_OVERRIDE $SHOW_REASONING --ollama
+    $COMPOSE_CMD $GPU_CONFIG run --rm backtester-ollama python -m src.backtester --tickers $TICKER $COMMAND_OVERRIDE $SHOW_REASONING --ollama
   fi
 
   exit 0
@@ -365,7 +365,7 @@ fi
 CMD="docker run -it --rm -v $(pwd)/.env:/app/.env"
 
 # Add the command
-CMD="$CMD ai-hedge-fund python $SCRIPT_PATH --ticker $TICKER $START_DATE $END_DATE $INITIAL_PARAM --margin-requirement $MARGIN_REQUIREMENT $SHOW_REASONING"
+CMD="$CMD ai-hedge-fund-tw python -m $SCRIPT_MODULE --tickers $TICKER $START_DATE $END_DATE $INITIAL_PARAM --margin-requirement $MARGIN_REQUIREMENT $SHOW_REASONING"
 
 # Run the command
 echo "Running: $CMD"

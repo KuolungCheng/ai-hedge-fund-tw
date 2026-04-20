@@ -13,6 +13,16 @@ from dataclasses import dataclass
 from typing import Optional
 
 
+def ratio_0_to_1(value: str) -> float:
+    try:
+        parsed = float(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("請輸入 0 到 1 之間的小數（例如 0.2）") from exc
+    if not (0 < parsed <= 1):
+        raise argparse.ArgumentTypeError("數值必須介於 0（不含）到 1（含）之間")
+    return parsed
+
+
 def add_common_args(
     parser: argparse.ArgumentParser,
     *,
@@ -24,42 +34,42 @@ def add_common_args(
         "--tickers",
         type=str,
         required=require_tickers,
-        help="Comma-separated list of stock ticker symbols (e.g., AAPL,MSFT,GOOGL)",
+        help="以逗號分隔的股票代碼清單（例如：AAPL,MSFT,GOOGL）",
     )
     if include_analyst_flags:
         parser.add_argument(
             "--analysts",
             type=str,
             required=False,
-            help="Comma-separated list of analysts to use (e.g., michael_burry,other_analyst)",
+            help="以逗號分隔要使用的分析代理清單（例如：wang,huang；輸入 all 代表全部）",
         )
         parser.add_argument(
             "--analysts-all",
             action="store_true",
-            help="Use all available analysts (overrides --analysts)",
+            help="使用全部可用分析代理（會覆蓋 --analysts）",
         )
     if include_ollama:
-        parser.add_argument("--ollama", action="store_true", help="Use Ollama for local LLM inference")
-    parser.add_argument("--model", type=str, required=False, help="Model name to use (e.g., gpt-4o)")
+        parser.add_argument("--ollama", action="store_true", help="使用 Ollama 進行本地 LLM 推論")
+    parser.add_argument("--model", type=str, required=False, help="指定模型名稱（例如：gpt-4.1）")
     return parser
 
 
 def add_date_args(parser: argparse.ArgumentParser, *, default_months_back: int | None = None) -> argparse.ArgumentParser:
     if default_months_back is None:
-        parser.add_argument("--start-date", type=str, help="Start date (YYYY-MM-DD)")
-        parser.add_argument("--end-date", type=str, help="End date (YYYY-MM-DD)")
+        parser.add_argument("--start-date", type=str, help="開始日期（YYYY-MM-DD）")
+        parser.add_argument("--end-date", type=str, help="結束日期（YYYY-MM-DD）")
     else:
         parser.add_argument(
             "--end-date",
             type=str,
             default=datetime.now().strftime("%Y-%m-%d"),
-            help="End date in YYYY-MM-DD format",
+            help="結束日期（YYYY-MM-DD）",
         )
         parser.add_argument(
             "--start-date",
             type=str,
             default=(datetime.now() - relativedelta(months=default_months_back)).strftime("%Y-%m-%d"),
-            help="Start date in YYYY-MM-DD format",
+            help="開始日期（YYYY-MM-DD）",
         )
     return parser
 
@@ -75,13 +85,16 @@ def select_analysts(flags: dict | None = None) -> list[str]:
         return [a[1] for a in ANALYST_ORDER]
 
     if flags and flags.get("analysts"):
-        return [a.strip() for a in flags["analysts"].split(",") if a.strip()]
+        parsed = [a.strip() for a in flags["analysts"].split(",") if a.strip()]
+        if any(a.lower() == "all" for a in parsed):
+            return [a[1] for a in ANALYST_ORDER]
+        return parsed
 
     choices = questionary.checkbox(
-        "Select your AI analysts.",
+        "請選擇要使用的 AI 分析代理。",
         choices=[questionary.Choice(display, value=value) for display, value in ANALYST_ORDER],
-        instruction="\n\nInstructions: \n1. Press Space to select/unselect analysts.\n2. Press 'a' to select/unselect all.\n3. Press Enter when done.",
-        validate=lambda x: len(x) > 0 or "You must select at least one analyst.",
+        instruction="\n\n操作說明：\n1. 按 Space 可勾選/取消。\n2. 按 'a' 可全選/全不選。\n3. 按 Enter 完成。",
+        validate=lambda x: len(x) > 0 or "至少要選擇一位分析代理。",
         style=questionary.Style(
             [
                 ("checkbox-selected", "fg:green"),
@@ -93,11 +106,11 @@ def select_analysts(flags: dict | None = None) -> list[str]:
     ).ask()
 
     if not choices:
-        print("\n\nInterrupt received. Exiting...")
+        print("\n\n已收到中斷訊號，正在結束。")
         sys.exit(0)
 
     print(
-        f"\nSelected analysts: {', '.join(Fore.GREEN + c.title().replace('_', ' ') + Style.RESET_ALL for c in choices)}\n"
+        f"\n已選擇分析代理：{', '.join(Fore.GREEN + c.title().replace('_', ' ') + Style.RESET_ALL for c in choices)}\n"
     )
     return choices
 
@@ -110,16 +123,16 @@ def select_model(use_ollama: bool, model_flag: str | None = None) -> tuple[str, 
         model = find_model_by_name(model_flag)
         if model:
             print(
-                f"\nUsing specified model: {Fore.CYAN}{model.provider.value}{Style.RESET_ALL} - {Fore.GREEN + Style.BRIGHT}{model.model_name}{Style.RESET_ALL}\n"
+                f"\n使用指定模型：{Fore.CYAN}{model.provider.value}{Style.RESET_ALL} - {Fore.GREEN + Style.BRIGHT}{model.model_name}{Style.RESET_ALL}\n"
             )
             return model.model_name, model.provider.value
         else:
-            print(f"{Fore.RED}Model '{model_flag}' not found. Please select a model.{Style.RESET_ALL}")
+            print(f"{Fore.RED}找不到模型 '{model_flag}'，請重新選擇模型。{Style.RESET_ALL}")
 
     if use_ollama:
-        print(f"{Fore.CYAN}Using Ollama for local LLM inference.{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}已啟用 Ollama 本地推論。{Style.RESET_ALL}")
         model_name = questionary.select(
-            "Select your Ollama model:",
+            "請選擇 Ollama 模型：",
             choices=[questionary.Choice(display, value=value) for display, value, _ in OLLAMA_LLM_ORDER],
             style=questionary.Style(
                 [
@@ -132,26 +145,26 @@ def select_model(use_ollama: bool, model_flag: str | None = None) -> tuple[str, 
         ).ask()
 
         if not model_name:
-            print("\n\nInterrupt received. Exiting...")
+            print("\n\n已收到中斷訊號，正在結束。")
             sys.exit(0)
 
         if model_name == "-":
-            model_name = questionary.text("Enter the custom model name:").ask()
+            model_name = questionary.text("請輸入自訂模型名稱：").ask()
             if not model_name:
-                print("\n\nInterrupt received. Exiting...")
+                print("\n\n已收到中斷訊號，正在結束。")
                 sys.exit(0)
 
         if not ensure_ollama_and_model(model_name):
-            print(f"{Fore.RED}Cannot proceed without Ollama and the selected model.{Style.RESET_ALL}")
+            print(f"{Fore.RED}找不到可用的 Ollama 或所選模型，無法繼續。{Style.RESET_ALL}")
             sys.exit(1)
 
         model_provider = ModelProvider.OLLAMA.value
         print(
-            f"\nSelected {Fore.CYAN}Ollama{Style.RESET_ALL} model: {Fore.GREEN + Style.BRIGHT}{model_name}{Style.RESET_ALL}\n"
+            f"\n已選擇 {Fore.CYAN}Ollama{Style.RESET_ALL} 模型：{Fore.GREEN + Style.BRIGHT}{model_name}{Style.RESET_ALL}\n"
         )
     else:
         model_choice = questionary.select(
-            "Select your LLM model:",
+            "請選擇 LLM 模型：",
             choices=[questionary.Choice(display, value=(name, provider)) for display, name, provider in LLM_ORDER],
             style=questionary.Style(
                 [
@@ -164,25 +177,25 @@ def select_model(use_ollama: bool, model_flag: str | None = None) -> tuple[str, 
         ).ask()
 
         if not model_choice:
-            print("\n\nInterrupt received. Exiting...")
+            print("\n\n已收到中斷訊號，正在結束。")
             sys.exit(0)
 
         model_name, model_provider = model_choice
 
         model_info = get_model_info(model_name, model_provider)
         if model_info and model_info.is_custom():
-            model_name = questionary.text("Enter the custom model name:").ask()
+            model_name = questionary.text("請輸入自訂模型名稱：").ask()
             if not model_name:
-                print("\n\nInterrupt received. Exiting...")
+                print("\n\n已收到中斷訊號，正在結束。")
                 sys.exit(0)
 
         if model_info:
             print(
-                f"\nSelected {Fore.CYAN}{model_provider}{Style.RESET_ALL} model: {Fore.GREEN + Style.BRIGHT}{model_name}{Style.RESET_ALL}\n"
+                f"\n已選擇 {Fore.CYAN}{model_provider}{Style.RESET_ALL} 模型：{Fore.GREEN + Style.BRIGHT}{model_name}{Style.RESET_ALL}\n"
             )
         else:
-            model_provider = "Unknown"
-            print(f"\nSelected model: {Fore.GREEN + Style.BRIGHT}{model_name}{Style.RESET_ALL}\n")
+            model_provider = "未知"
+            print(f"\n已選擇模型：{Fore.GREEN + Style.BRIGHT}{model_name}{Style.RESET_ALL}\n")
 
     return model_name, model_provider or ""
 
@@ -192,12 +205,12 @@ def resolve_dates(start_date: str | None, end_date: str | None, *, default_month
         try:
             datetime.strptime(start_date, "%Y-%m-%d")
         except ValueError:
-            raise ValueError("Start date must be in YYYY-MM-DD format")
+            raise ValueError("開始日期格式必須為 YYYY-MM-DD")
     if end_date:
         try:
             datetime.strptime(end_date, "%Y-%m-%d")
         except ValueError:
-            raise ValueError("End date must be in YYYY-MM-DD format")
+            raise ValueError("結束日期格式必須為 YYYY-MM-DD")
 
     final_end = end_date or datetime.now().strftime("%Y-%m-%d")
     if start_date:
@@ -219,6 +232,7 @@ class CLIInputs:
     end_date: str
     initial_cash: float
     margin_requirement: float
+    base_position_limit_pct: float
     show_reasoning: bool = False
     show_agent_graph: bool = False
     raw_args: Optional[argparse.Namespace] = None
@@ -245,20 +259,27 @@ def parse_cli_inputs(
         dest="initial_cash",
         type=float,
         default=100000.0,
-        help="Initial cash position (alias: --initial-capital). Defaults to 100000.0",
+        help="初始現金（別名：--initial-capital），預設 100000.0",
     )
     parser.add_argument(
         "--margin-requirement",
         dest="margin_requirement",
         type=float,
         default=0.0,
-        help="Initial margin requirement ratio for shorts (e.g., 0.5 for 50%%). Defaults to 0.0",
+        help="放空保證金比率（例如 0.5 代表 50%%），預設 0.0",
+    )
+    parser.add_argument(
+        "--base-position-limit",
+        dest="base_position_limit_pct",
+        type=ratio_0_to_1,
+        default=0.20,
+        help="風險管理基準部位上限（0~1 小數，例如 0.2 代表 20%%），預設 0.2",
     )
 
     if include_reasoning_flag:
-        parser.add_argument("--show-reasoning", action="store_true", help="Show reasoning from each agent")
+        parser.add_argument("--show-reasoning", action="store_true", help="顯示各代理推理內容")
     if include_graph_flag:
-        parser.add_argument("--show-agent-graph", action="store_true", help="Show the agent graph")
+        parser.add_argument("--show-agent-graph", action="store_true", help="顯示代理流程圖")
 
     args = parser.parse_args()
 
@@ -280,6 +301,7 @@ def parse_cli_inputs(
         end_date=end_date,
         initial_cash=getattr(args, "initial_cash", 100000.0),
         margin_requirement=getattr(args, "margin_requirement", 0.0),
+        base_position_limit_pct=getattr(args, "base_position_limit_pct", 0.20),
         show_reasoning=getattr(args, "show_reasoning", False),
         show_agent_graph=getattr(args, "show_agent_graph", False),
         raw_args=args,

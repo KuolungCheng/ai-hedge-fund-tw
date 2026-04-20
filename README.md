@@ -1,157 +1,151 @@
-# AI Hedge Fund
+# AI 對沖基金（台灣分析師版）
 
-This is a proof of concept for an AI-powered hedge fund.  The goal of this project is to explore the use of AI to make trading decisions.  This project is for **educational** purposes only and is not intended for real trading or investment.
+本專案以 https://github.com/virattt/ai-hedge-fund 為基礎進行改寫與在地化調整。  
 
-This system employs several agents working together:
+這是一個用於**教學與研究**的多代理（Multi-Agent）交易決策專案。  
+系統不會自動下單到券商，僅輸出策略建議與回測結果。
 
-1. Aswath Damodaran Agent - The Dean of Valuation, focuses on story, numbers, and disciplined valuation
-2. Ben Graham Agent - The godfather of value investing, only buys hidden gems with a margin of safety
-3. Bill Ackman Agent - An activist investor, takes bold positions and pushes for change
-4. Cathie Wood Agent - The queen of growth investing, believes in the power of innovation and disruption
-5. Charlie Munger Agent - Warren Buffett's partner, only buys wonderful businesses at fair prices
-6. Michael Burry Agent - The Big Short contrarian who hunts for deep value
-7. Mohnish Pabrai Agent - The Dhandho investor, who looks for doubles at low risk
-8. Nassim Taleb Agent - The Black Swan risk analyst, focuses on tail risk, antifragility, and asymmetric payoffs
-9. Peter Lynch Agent - Practical investor who seeks "ten-baggers" in everyday businesses
-10. Phil Fisher Agent - Meticulous growth investor who uses deep "scuttlebutt" research 
-11. Rakesh Jhunjhunwala Agent - The Big Bull of India
-12. Stanley Druckenmiller Agent - Macro legend who hunts for asymmetric opportunities with growth potential
-13. Warren Buffett Agent - The oracle of Omaha, seeks wonderful companies at a fair price
-14. Valuation Agent - Calculates the intrinsic value of a stock and generates trading signals
-15. Sentiment Agent - Analyzes market sentiment and generates trading signals
-16. Fundamentals Agent - Analyzes fundamental data and generates trading signals
-17. Technicals Agent - Analyzes technical indicators and generates trading signals
-18. Risk Manager - Calculates risk metrics and sets position limits
-19. Portfolio Manager - Makes final trading decisions and generates orders
+![執行畫面示意](screenshots/Screenshot.png)
 
-<img width="1042" alt="Screenshot 2025-03-22 at 6 19 07 PM" src="https://github.com/user-attachments/assets/cbae3dcf-b571-490d-b0ad-3f0f035ac0d4" />
+## 免責聲明
 
-Note: the system does not actually make any trades.
+- 本專案僅供學習與研究，不構成任何投資建議
+- 不保證績效，使用者需自行承擔風險
+- 歷史績效不代表未來結果
 
-[![Twitter Follow](https://img.shields.io/twitter/follow/virattt?style=social)](https://twitter.com/virattt)
+## 專案特色
 
-## Disclaimer
+- 多位分析代理共同評估同一檔股票
+- 風險管理代理依波動度與相關性控制部位
+- 投資組合經理整合訊號後輸出最終動作（買進/賣出/放空/回補/持有）
+- 支援 CLI 即時決策與回測
+- 支援 OpenAI / Anthropic / Groq / DeepSeek / Ollama 等模型來源
+- 預設使用 **yfinance** 取得市場資料（不需 `FINANCIAL_DATASETS_API_KEY`）
 
-This project is for **educational and research purposes only**.
+## 代理清單（目前版本）
 
-- Not intended for real trading or investment
-- No investment advice or guarantees provided
-- Creator assumes no liability for financial losses
-- Consult a financial advisor for investment decisions
-- Past performance does not indicate future results
+- 嘎偉（`airforce`）：偏空風險與估值派
+- 折折（`discount`）：成長趨勢派
+- 照哥（`huang`）：基本面體質派
+- 骨癌（`cancer`）：技術面節奏派
+- 腦王（`wang`）：情緒與籌碼派
+- 老謝（`hindsight`）：新聞與敘事派
+- 風險管理代理（`risk_management_agent`）
+- 投資組合經理（`portfolio_manager`）
 
-By using this software, you agree to use it solely for learning purposes.
+## 安裝與環境設定
 
-## Table of Contents
-- [How to Install](#how-to-install)
-- [How to Run](#how-to-run)
-  - [⌨️ Command Line Interface](#️-command-line-interface)
-  - [🖥️ Web Application](#️-web-application)
-- [How to Contribute](#how-to-contribute)
-- [Feature Requests](#feature-requests)
-- [License](#license)
+### Python 版本需求（重要）
 
-## How to Install
+- 本專案請使用 **Python 3.12（含）以下版本**（建議 3.11 或 3.12）
+- 由於 NumPy 相容性因素，使用 Python 3.13+ 可能導致安裝或執行失敗
 
-Before you can run the AI Hedge Fund, you'll need to install it and set up your API keys. These steps are common to both the full-stack web application and command line interface.
-
-### 1. Clone the Repository
+### 1. 下載專案
 
 ```bash
-git clone https://github.com/virattt/ai-hedge-fund.git
-cd ai-hedge-fund
+git clone https://github.com/KuolungCheng/ai-hedge-fund-tw.git
+cd ai-hedge-fund-tw
 ```
 
-### 2. Set up API keys
+### 2. 安裝依賴
 
-Create a `.env` file for your API keys:
-```bash
-# Create .env file for your API keys (in the root directory)
-cp .env.example .env
-```
+若尚未安裝 Poetry，請先依官方文件安裝：<https://python-poetry.org/docs/#installation>  
+（macOS/Homebrew 也可用 `brew install poetry`）
 
-Open and edit the `.env` file to add your API keys:
-```bash
-# For running LLMs hosted by openai (gpt-4o, gpt-4o-mini, etc.)
-OPENAI_API_KEY=your-openai-api-key
-
-# For getting financial data to power the hedge fund
-FINANCIAL_DATASETS_API_KEY=your-financial-datasets-api-key
-```
-
-**Important**: You must set at least one LLM API key (e.g. `OPENAI_API_KEY`, `GROQ_API_KEY`, `ANTHROPIC_API_KEY`, or `DEEPSEEK_API_KEY`) for the hedge fund to work. 
-
-## How to Run
-
-### ⌨️ Command Line Interface
-
-You can run the AI Hedge Fund directly via terminal. This approach offers more granular control and is useful for automation, scripting, and integration purposes.
-
-<img width="992" alt="Screenshot 2025-01-06 at 5 50 17 PM" src="https://github.com/user-attachments/assets/e8ca04bf-9989-4a7d-a8b4-34e04666663b" />
-
-#### Quick Start
-
-1. Install Poetry (if not already installed):
-```bash
-curl -sSL https://install.python-poetry.org | python3 -
-```
-
-2. Install dependencies:
 ```bash
 poetry install
 ```
 
-#### Run the AI Hedge Fund
-```bash
-poetry run python src/main.py --ticker AAPL,MSFT,NVDA
-```
-
-You can also specify a `--ollama` flag to run the AI hedge fund using local LLMs.
+### 3. 設定 `.env`
 
 ```bash
-poetry run python src/main.py --ticker AAPL,MSFT,NVDA --ollama
+cp .env.example .env
 ```
 
-You can optionally specify the start and end dates to make decisions over a specific time period.
+至少設定一組 LLM 金鑰（擇一即可）：
 
 ```bash
-poetry run python src/main.py --ticker AAPL,MSFT,NVDA --start-date 2024-01-01 --end-date 2024-03-01
+OPENAI_API_KEY=your_openai_key
+# 或
+ANTHROPIC_API_KEY=your_anthropic_key
+# 或
+GROQ_API_KEY=your_groq_key
+# 或
+DEEPSEEK_API_KEY=your_deepseek_key
 ```
 
-#### Run the Backtester
+## CLI 使用方式
+
+### 即時決策（主程式）
+
 ```bash
-poetry run python src/backtester.py --ticker AAPL,MSFT,NVDA
+poetry run python -m src.main --tickers 2330.TW,6515.TW
 ```
 
-**Example Output:**
-<img width="941" alt="Screenshot 2025-01-06 at 5 47 52 PM" src="https://github.com/user-attachments/assets/00e794ea-8628-44e6-9a84-8f8a31ad3b47" />
+常用參數範例：
 
+```bash
+# 指定模型
+poetry run python -m src.main --tickers 2330.TW,6515.TW --model gpt-4.1
 
-Note: The `--ollama`, `--start-date`, and `--end-date` flags work for the backtester, as well!
+# 使用全部分析師
+poetry run python -m src.main --tickers 2330.TW,6515.TW --analysts all
 
-### 🖥️ Web Application
+# 指定部分分析師
+poetry run python -m src.main --tickers 2330.TW,6515.TW --analysts airforce,discount,huang
 
-The new way to run the AI Hedge Fund is through our web application that provides a user-friendly interface. This is recommended for users who prefer visual interfaces over command line tools.
+# 指定分析區間
+poetry run python -m src.main --tickers 2330.TW,6515.TW --start-date 2025-01-01 --end-date 2025-03-31
 
-Please see detailed instructions on how to install and run the web application [here](https://github.com/virattt/ai-hedge-fund/tree/main/app).
+# 調整風險管理基準部位上限（預設 0.2）
+poetry run python -m src.main --tickers 2330.TW,6515.TW --base-position-limit 0.15
+```
 
-<img width="1721" alt="Screenshot 2025-06-28 at 6 41 03 PM" src="https://github.com/user-attachments/assets/b95ab696-c9f4-416c-9ad1-51feb1f5374b" />
+### 回測
 
+```bash
+poetry run python -m src.backtester --tickers 2330.TW,6515.TW
+```
 
-## How to Contribute
+或使用 Poetry script：
 
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
+```bash
+poetry run backtester --tickers 2330.TW,6515.TW
+```
 
-**Important**: Please keep your pull requests small and focused.  This will make it easier to review and merge.
+## 風險管理參數說明
 
-## Feature Requests
+- `--base-position-limit`：風險管理基準部位上限（0~1，小數）
+- `remaining_position_limit` 為系統內部計算值，概念如下：
+  - `position_limit = 投資組合價值 × (基準上限 × 波動度調整 × 相關性調整)`
+  - `remaining_position_limit = position_limit - 當前部位價值`
+  - 並再受可用現金限制
 
-If you have a feature request, please open an [issue](https://github.com/virattt/ai-hedge-fund/issues) and make sure it is tagged with `enhancement`.
+## 開發常用指令
 
-## License
+```bash
+# 測試
+poetry run pytest
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+# 程式碼格式化
+poetry run black .
+poetry run isort .
+
+# 靜態檢查
+poetry run flake8
+```
+
+## 專案結構（精簡）
+
+```text
+src/
+  agents/         # 分析代理、風險管理、投資組合經理
+  backtesting/    # 回測引擎
+  cli/            # CLI 參數與互動輸入
+  tools/          # 資料來源整合（含 yfinance）
+v2/               # 新架構實驗區（尚未整合至主流程）
+```
+
+## 授權
+
+本專案使用 MIT License，詳見 `LICENSE`。

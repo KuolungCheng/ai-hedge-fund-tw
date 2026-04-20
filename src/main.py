@@ -32,13 +32,13 @@ def parse_hedge_fund_response(response):
     try:
         return json.loads(response)
     except json.JSONDecodeError as e:
-        print(f"JSON decoding error: {e}\nResponse: {repr(response)}")
+        print(f"JSON 解析失敗：{e}\n回應內容：{repr(response)}")
         return None
     except TypeError as e:
-        print(f"Invalid response type (expected string, got {type(response).__name__}): {e}")
+        print(f"回應型別錯誤（預期為字串，實際為 {type(response).__name__}）：{e}")
         return None
     except Exception as e:
-        print(f"Unexpected error while parsing response: {e}\nResponse: {repr(response)}")
+        print(f"解析回應時發生未預期錯誤：{e}\n回應內容：{repr(response)}")
         return None
 
 
@@ -52,6 +52,7 @@ def run_hedge_fund(
     selected_analysts: list[str] = [],
     model_name: str = "gpt-4.1",
     model_provider: str = "OpenAI",
+    base_position_limit_pct: float = 0.20,
 ):
     # Start progress tracking
     progress.start()
@@ -65,7 +66,7 @@ def run_hedge_fund(
             {
                 "messages": [
                     HumanMessage(
-                        content="Make trading decisions based on the provided data.",
+                        content="請根據提供資料產生交易決策。",
                     )
                 ],
                 "data": {
@@ -79,6 +80,7 @@ def run_hedge_fund(
                     "show_reasoning": show_reasoning,
                     "model_name": model_name,
                     "model_provider": model_provider,
+                    "base_position_limit_pct": base_position_limit_pct,
                 },
             },
         )
@@ -132,7 +134,7 @@ def create_workflow(selected_analysts=None):
 
 if __name__ == "__main__":
     inputs = parse_cli_inputs(
-        description="Run the hedge fund trading system",
+        description="執行 AI 對沖基金交易系統",
         require_tickers=True,
         default_months_back=None,
         include_graph_flag=True,
@@ -175,5 +177,6 @@ if __name__ == "__main__":
         selected_analysts=inputs.selected_analysts,
         model_name=inputs.model_name,
         model_provider=inputs.model_provider,
+        base_position_limit_pct=inputs.base_position_limit_pct,
     )
     print_trading_output(result)
