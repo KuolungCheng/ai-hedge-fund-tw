@@ -105,40 +105,6 @@ poetry run python -m src.main --tickers 2330.TW,6515.TW --start-date 2025-01-01 
 poetry run python -m src.main --tickers 2330.TW,6515.TW --base-position-limit 0.15
 ```
 
-### 回測
-
-```bash
-poetry run python -m src.backtester --tickers 2330.TW,6515.TW
-```
-
-或使用 Poetry script：
-
-```bash
-poetry run backtester --tickers 2330.TW,6515.TW
-```
-
-## 風險管理參數說明
-
-- `--base-position-limit`：風險管理基準部位上限（0~1，小數）
-- `remaining_position_limit` 為系統內部計算值，概念如下：
-  - `position_limit = 投資組合價值 × (基準上限 × 波動度調整 × 相關性調整)`
-  - `remaining_position_limit = position_limit - 當前部位價值`
-  - 並再受可用現金限制
-
-## 開發常用指令
-
-```bash
-# 測試
-poetry run pytest
-
-# 程式碼格式化
-poetry run black .
-poetry run isort .
-
-# 靜態檢查
-poetry run flake8
-```
-
 ## 專案結構（精簡）
 
 ```text
