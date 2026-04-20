@@ -3,6 +3,7 @@ from src.graph.state import AgentState, show_agent_reasoning
 from src.utils.progress import progress
 from src.tools.api import get_prices, prices_to_df
 import json
+import math
 import numpy as np
 import pandas as pd
 from src.utils.api_key import get_api_key_from_state
@@ -55,7 +56,11 @@ def risk_management_agent(state: AgentState, agent_id: str = "risk_management_ag
         
         if not prices_df.empty and len(prices_df) > 1:
             current_price = prices_df["close"].iloc[-1]
-            current_prices[ticker] = current_price
+            if math.isnan(current_price):
+                progress.update_status(agent_id, ticker, "警告：最新價格為 NaN")
+                current_prices[ticker] = 0.0
+            else:
+                current_prices[ticker] = current_price
             
             # Calculate volatility metrics
             volatility_metrics = calculate_volatility_metrics(prices_df)
@@ -66,14 +71,15 @@ def risk_management_agent(state: AgentState, agent_id: str = "risk_management_ag
             if len(daily_returns) > 0:
                 returns_by_ticker[ticker] = daily_returns
             
-            progress.update_status(
-                agent_id, 
-                ticker, 
-                f"價格：{current_price:.2f}，年化波動：{volatility_metrics['annualized_volatility']:.1%}"
-            )
+            if not math.isnan(current_prices[ticker]):
+                progress.update_status(
+                    agent_id, 
+                    ticker, 
+                    f"價格：{current_prices[ticker]:.2f}，年化波動：{volatility_metrics['annualized_volatility']:.1%}"
+                )
         else:
             progress.update_status(agent_id, ticker, "警告：價格資料不足")
-            current_prices[ticker] = 0
+            current_prices[ticker] = 0.0
             volatility_data[ticker] = {
                 "daily_volatility": 0.05,
                 "annualized_volatility": 0.05 * np.sqrt(252),
@@ -101,19 +107,22 @@ def risk_management_agent(state: AgentState, agent_id: str = "risk_management_ag
     total_portfolio_value = portfolio.get("cash", 0.0)
     
     for ticker, position in portfolio.get("positions", {}).items():
-        if ticker in current_prices:
+        if ticker in current_prices and not math.isnan(current_prices[ticker]):
             # Add market value of long positions
             total_portfolio_value += position.get("long", 0) * current_prices[ticker]
             # Subtract market value of short positions
             total_portfolio_value -= position.get("short", 0) * current_prices[ticker]
     
+    if math.isnan(total_portfolio_value):
+        total_portfolio_value = portfolio.get("cash", 0.0)
+
     progress.update_status(agent_id, None, f"投資組合總價值：{total_portfolio_value:.2f}")
 
     # Calculate volatility- and correlation-adjusted risk limits for each ticker
     for ticker in tickers:
         progress.update_status(agent_id, ticker, "計算波動度與相關性調整後上限")
         
-        if ticker not in current_prices or current_prices[ticker] <= 0:
+        if ticker not in current_prices or current_prices[ticker] <= 0 or math.isnan(current_prices[ticker]):
             progress.update_status(agent_id, ticker, "失敗：缺少有效價格資料")
             risk_analysis[ticker] = {
                 "remaining_position_limit": 0.0,
@@ -170,14 +179,21 @@ def risk_management_agent(state: AgentState, agent_id: str = "risk_management_ag
         
         # Combine volatility and correlation adjustments
         combined_limit_pct = vol_adjusted_limit_pct * corr_multiplier
+        if math.isnan(combined_limit_pct):
+            combined_limit_pct = 0.0
+            
         # Convert to dollar position limit
         position_limit = total_portfolio_value * combined_limit_pct
         
         # Calculate remaining limit for this position
         remaining_position_limit = position_limit - current_position_value
+        if math.isnan(remaining_position_limit):
+            remaining_position_limit = 0.0
         
         # Ensure we don't exceed available cash
         max_position_size = min(remaining_position_limit, portfolio.get("cash", 0))
+        if math.isnan(max_position_size):
+            max_position_size = 0.0
         
         risk_analysis[ticker] = {
             "remaining_position_limit": float(max_position_size),

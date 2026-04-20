@@ -9,6 +9,7 @@ configurable weights.
 
 import json
 import statistics
+import math
 from langchain_core.messages import HumanMessage
 from src.graph.state import AgentState, show_agent_reasoning
 from src.utils.progress import progress
@@ -162,7 +163,9 @@ def valuation_analyst_agent(state: AgentState, agent_id: str = "valuation_analys
         ) / total_weight
 
         signal = "bullish" if weighted_gap > 0.15 else "bearish" if weighted_gap < -0.15 else "neutral"
-        confidence = round(min(abs(weighted_gap) / 0.30 * 100, 100))
+        confidence = 0
+        if not math.isnan(weighted_gap):
+            confidence = round(min(abs(weighted_gap) / 0.30 * 100, 100))
 
         # Enhanced reasoning with DCF scenario details
         reasoning = {}

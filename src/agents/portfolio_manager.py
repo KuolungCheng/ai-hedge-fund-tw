@@ -1,5 +1,6 @@
 import json
 import time
+import math
 from langchain_core.messages import HumanMessage
 from langchain_core.prompts import ChatPromptTemplate
 
@@ -123,7 +124,7 @@ def portfolio_management_agent(state: AgentState, agent_id: str = "portfolio_man
         current_prices[ticker] = float(risk_data.get("current_price", 0.0))
 
         # Calculate maximum shares allowed based on position limit and price
-        if current_prices[ticker] > 0:
+        if current_prices[ticker] > 0 and not math.isnan(position_limits[ticker]) and not math.isnan(current_prices[ticker]):
             max_shares[ticker] = int(position_limits[ticker] // current_prices[ticker])
         else:
             max_shares[ticker] = 0

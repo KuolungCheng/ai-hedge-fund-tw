@@ -113,31 +113,31 @@ def technical_analyst_agent(state: AgentState, agent_id: str = "technical_analys
         # Generate detailed analysis report for this ticker
         technical_analysis[ticker] = {
             "signal": combined_signal["signal"],
-            "confidence": round(combined_signal["confidence"] * 100),
+            "confidence": round(safe_float(combined_signal["confidence"]) * 100),
             "reasoning": {
                 "trend_following": {
                     "signal": trend_signals["signal"],
-                    "confidence": round(trend_signals["confidence"] * 100),
+                    "confidence": round(safe_float(trend_signals["confidence"]) * 100),
                     "metrics": normalize_pandas(trend_signals["metrics"]),
                 },
                 "mean_reversion": {
                     "signal": mean_reversion_signals["signal"],
-                    "confidence": round(mean_reversion_signals["confidence"] * 100),
+                    "confidence": round(safe_float(mean_reversion_signals["confidence"]) * 100),
                     "metrics": normalize_pandas(mean_reversion_signals["metrics"]),
                 },
                 "momentum": {
                     "signal": momentum_signals["signal"],
-                    "confidence": round(momentum_signals["confidence"] * 100),
+                    "confidence": round(safe_float(momentum_signals["confidence"]) * 100),
                     "metrics": normalize_pandas(momentum_signals["metrics"]),
                 },
                 "volatility": {
                     "signal": volatility_signals["signal"],
-                    "confidence": round(volatility_signals["confidence"] * 100),
+                    "confidence": round(safe_float(volatility_signals["confidence"]) * 100),
                     "metrics": normalize_pandas(volatility_signals["metrics"]),
                 },
                 "statistical_arbitrage": {
                     "signal": stat_arb_signals["signal"],
-                    "confidence": round(stat_arb_signals["confidence"] * 100),
+                    "confidence": round(safe_float(stat_arb_signals["confidence"]) * 100),
                     "metrics": normalize_pandas(stat_arb_signals["metrics"]),
                 },
                 "trend_bias": trend_bias,

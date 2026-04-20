@@ -8,6 +8,7 @@ Implements a growth-focused valuation methodology.
 
 import json
 import statistics
+import math
 from langchain_core.messages import HumanMessage
 from src.graph.state import AgentState, show_agent_reasoning
 from src.utils.progress import progress
@@ -98,7 +99,9 @@ def growth_analyst_agent(state: AgentState, agent_id: str = "growth_analyst_agen
         else:
             signal = "neutral"
             
-        confidence = round(abs(weighted_score - 0.5) * 2 * 100)
+        confidence = 0
+        if not math.isnan(weighted_score):
+            confidence = round(abs(weighted_score - 0.5) * 2 * 100)
 
         reasoning = {
             "historical_growth": growth_trends,
@@ -109,7 +112,7 @@ def growth_analyst_agent(state: AgentState, agent_id: str = "growth_analyst_agen
             "final_analysis": {
                 "signal": signal,
                 "confidence": confidence,
-                "weighted_score": round(weighted_score, 2)
+                "weighted_score": round(weighted_score, 2) if not math.isnan(weighted_score) else 0.0
             }
         }
 
@@ -138,7 +141,7 @@ def growth_analyst_agent(state: AgentState, agent_id: str = "growth_analyst_agen
 
 def _calculate_trend(data: list[float | None]) -> float:
     """Calculates the slope of the trend line for the given data."""
-    clean_data = [d for d in data if d is not None]
+    clean_data = [d for d in data if d is not None and not (isinstance(d, float) and math.isnan(d))]
     if len(clean_data) < 2:
         return 0.0
     
@@ -173,7 +176,7 @@ def analyze_growth_trends(metrics: list) -> dict:
     score = 0
     
     # Revenue
-    if rev_growth[0] is not None:
+    if rev_growth[0] is not None and not (isinstance(rev_growth[0], float) and math.isnan(rev_growth[0])):
         if rev_growth[0] > 0.20:
             score += 0.4
         elif rev_growth[0] > 0.10:
@@ -182,7 +185,7 @@ def analyze_growth_trends(metrics: list) -> dict:
             score += 0.1 # Accelerating
             
     # EPS
-    if eps_growth[0] is not None:
+    if eps_growth[0] is not None and not (isinstance(eps_growth[0], float) and math.isnan(eps_growth[0])):
         if eps_growth[0] > 0.20:
             score += 0.25
         elif eps_growth[0] > 0.10:
@@ -191,7 +194,7 @@ def analyze_growth_trends(metrics: list) -> dict:
             score += 0.05
     
     # FCF
-    if fcf_growth[0] is not None:
+    if fcf_growth[0] is not None and not (isinstance(fcf_growth[0], float) and math.isnan(fcf_growth[0])):
         if fcf_growth[0] > 0.15:
             score += 0.1
             
@@ -216,14 +219,14 @@ def analyze_valuation(metrics) -> dict:
     score = 0
     
     # PEG Ratio
-    if peg_ratio is not None:
+    if peg_ratio is not None and not (isinstance(peg_ratio, float) and math.isnan(peg_ratio)):
         if peg_ratio < 1.0:
             score += 0.5
         elif peg_ratio < 2.0:
             score += 0.25
             
     # Price to Sales Ratio
-    if ps_ratio is not None:
+    if ps_ratio is not None and not (isinstance(ps_ratio, float) and math.isnan(ps_ratio)):
         if ps_ratio < 2.0:
             score += 0.5
         elif ps_ratio < 5.0:
@@ -251,14 +254,14 @@ def analyze_margin_trends(metrics: list) -> dict:
     score = 0
     
     # Gross Margin
-    if gross_margins[0] is not None:
+    if gross_margins[0] is not None and not (isinstance(gross_margins[0], float) and math.isnan(gross_margins[0])):
         if gross_margins[0] > 0.5: # Healthy margin
             score += 0.2
         if gm_trend > 0: # Expanding
             score += 0.2
 
     # Operating Margin
-    if operating_margins[0] is not None:
+    if operating_margins[0] is not None and not (isinstance(operating_margins[0], float) and math.isnan(operating_margins[0])):
         if operating_margins[0] > 0.15: # Healthy margin
             score += 0.2
         if om_trend > 0: # Expanding
@@ -317,14 +320,14 @@ def check_financial_health(metrics) -> dict:
     score = 1.0
     
     # Debt to Equity
-    if debt_to_equity is not None:
+    if debt_to_equity is not None and not (isinstance(debt_to_equity, float) and math.isnan(debt_to_equity)):
         if debt_to_equity > 1.5:
             score -= 0.5
         elif debt_to_equity > 0.8:
             score -= 0.2
             
     # Current Ratio
-    if current_ratio is not None:
+    if current_ratio is not None and not (isinstance(current_ratio, float) and math.isnan(current_ratio)):
         if current_ratio < 1.0:
             score -= 0.5
         elif current_ratio < 1.5:

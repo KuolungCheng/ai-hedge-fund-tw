@@ -1,5 +1,6 @@
 # 老謝 - nws_sentiment_agent
 import datetime
+import math
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel, Field
 from src.data.models import CompanyNews
@@ -34,7 +35,9 @@ def _compute_recent_return(prices: list) -> float | None:
         if close_val is None:
             continue
         try:
-            closes.append(float(close_val))
+            val = float(close_val)
+            if not math.isnan(val):
+                closes.append(val)
         except (TypeError, ValueError):
             continue
 
@@ -55,7 +58,7 @@ def _select_hindsight_signal(
     recent_return: float | None,
 ) -> tuple[str, str]:
     # 馬後炮人設：近期走勢優先，降低「大量中立」的結果。
-    if recent_return is not None:
+    if recent_return is not None and not math.isnan(recent_return):
         if recent_return >= 0.03:
             return "bullish", "price_trend"
         if recent_return <= -0.03:
@@ -66,7 +69,7 @@ def _select_hindsight_signal(
     if bearish_signals > bullish_signals:
         return "bearish", "news_consensus"
 
-    if recent_return is not None:
+    if recent_return is not None and not math.isnan(recent_return):
         if recent_return >= 0.01:
             return "bullish", "price_tiebreaker"
         if recent_return <= -0.01:
@@ -192,7 +195,7 @@ def news_sentiment_agent(state: AgentState, agent_id: str = "news_sentiment_agen
                     "bearish_articles": bearish_signals,
                     "neutral_articles": neutral_signals,
                     "articles_classified_by_llm": sentiments_classified_by_llm,
-                    "recent_20d_return_pct": round(recent_return * 100, 2) if recent_return is not None else None,
+                    "recent_20d_return_pct": round(recent_return * 100, 2) if recent_return is not None and not math.isnan(recent_return) else None,
                     "signal_source": signal_source,
                 },
             }
@@ -284,7 +287,7 @@ def _calculate_confidence_score(
             signal_proportion = (max(bullish_signals, bearish_signals) / total_signals) * 100 if total_signals > 0 else 0.0
             base_confidence = round(0.7 * avg_llm_confidence + 0.3 * signal_proportion, 2)
 
-    if recent_return is not None and signal_source in {"price_trend", "price_tiebreaker"}:
+    if recent_return is not None and not math.isnan(recent_return) and signal_source in {"price_trend", "price_tiebreaker"}:
         trend_confidence = min(abs(recent_return) * 800, 95.0)
         base_confidence = max(base_confidence, trend_confidence)
 
