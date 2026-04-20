@@ -1,6 +1,7 @@
 # AI 對沖基金（台灣分析師版）
 
 本專案以 https://github.com/virattt/ai-hedge-fund 為基礎進行改寫與在地化調整。  
+(This project is adapted and localized from https://github.com/virattt/ai-hedge-fund.)
 
 這是一個用於**教學與研究**的多代理（Multi-Agent）交易決策專案。  
 系統不會自動下單到券商，僅輸出策略建議與回測結果。
